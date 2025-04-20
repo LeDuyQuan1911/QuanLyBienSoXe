@@ -9,8 +9,9 @@ from PIL import Image, ImageTk
 from datetime import datetime
 import subprocess
 from tkinter import ttk  # Add this import to use ttk
+import openpyxl
 import torch
-
+import pandas as pd
 from function import helper
 
 # Giả sử bạn đã có hàm detect_license_plate_from_image để nhận diện biển số xe
@@ -40,7 +41,7 @@ class CameraApp:
             return
         
         # Create the main frame
-        main_frame = tk.Frame(self.window)
+        main_frame = tk.Frame(self.window, bg= '#4CAF50')
         main_frame.pack(expand=True, fill=tk.BOTH)
 
         # Create the image frame for displaying vehicle images
@@ -60,34 +61,137 @@ class CameraApp:
         button_frame.pack(pady=10)
 
         # "Send Vehicle" button
-        self.send_button = tk.Button(button_frame, text="Send Vehicle", width=20, height=2, command=self.capture_and_send, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'))
+        self.send_button = tk.Button(button_frame, text="Gửi Xe", width=20, height=2, command=self.capture_and_send, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'))
         self.send_button.pack(side=tk.LEFT, padx=5)
 
         # "Retrieve Vehicle" button
-        self.retrieve_button = tk.Button(button_frame, text="Retrieve Vehicle", width=20, height=2, command=self.capture_and_retrieve, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'))
+        self.retrieve_button = tk.Button(button_frame, text="Lấy xe", width=20, height=2, command=self.capture_and_retrieve, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'))
         self.retrieve_button.pack(side=tk.LEFT, padx=5)
 
         # "Enter Vehicle Info" button
-        self.input_info_button = tk.Button(button_frame, text="Enter Vehicle Info", width=20, height=2, command=self.input_vehicle_info, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'))
+        self.input_info_button = tk.Button(button_frame, text="Nhập Thông tin xe mới", width=20, height=2, command=self.input_vehicle_info, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'))
         self.input_info_button.pack(side=tk.LEFT, padx=5)
 
         # "View Vehicle Data" button
-        self.view_data_button = tk.Button(button_frame, text="View Vehicle Data", width=20, height=2, command=self.open_data_view, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'))
+        self.view_data_button = tk.Button(button_frame, text="Xem dữ liệu xe", width=20, height=2, command=self.open_data_view, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'))
         self.view_data_button.pack(side=tk.LEFT, padx=5)
 
         # "View Vehicle Images" button
-        self.view_images_button = tk.Button(button_frame, text="View Vehicle Images", width=20, height=2, command=self.view_vehicle_images, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'))
+        self.view_images_button = tk.Button(button_frame, text="Xem lịch sử hình ảnh", width=20, height=2, command=self.view_vehicle_images, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'))
         self.view_images_button.pack(side=tk.LEFT, padx=5)
 
-        # Create a button to toggle fullscreen
-        self.fullscreen_button = tk.Button(button_frame, text="Toggle Fullscreen", width=20, height=2, command=self.toggle_fullscreen, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'))
+        self.fullscreen_button = tk.Button(button_frame, text="Xuất Excel thông tin chủ xe", width=20, height=2, command=self.open_owner_data_view, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'))
         self.fullscreen_button.pack(side=tk.LEFT, padx=5)
+        
+        # Create a button to toggle fullscreen
+        self.fullscreen_button = tk.Button(button_frame, text="Mở rộng khung hình", width=20, height=2, command=self.toggle_fullscreen, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'))
+        self.fullscreen_button.pack(side=tk.LEFT, padx=5)
+
 
         # Update the video feed
         self.update()
         self.window.mainloop()
 
+    def open_owner_data_view(self):
+        # Cửa sổ hiển thị dữ liệu chủ xe
+        data_window = tk.Toplevel(self.window,bg='#4CAF50' )
+        data_window.title("Xem Dữ Liệu Chủ Xe")
 
+        # Tạo Frame để sắp xếp các nút ngang hàng
+        button_frame = tk.Frame(data_window, bg='#4CAF50')  # Nền xanh cho frame chứa nút
+        button_frame.pack(pady=10)
+
+        # Tạo ô nhập tìm kiếm và nút tìm kiếm
+        search_label = tk.Label(data_window, text="Tìm kiếm theo Tên Chủ Xe, Biển Số Xe hoặc Số Điện Thoại:", bg='#4CAF50')
+        search_label.pack(pady=5)
+        
+        search_entry = tk.Entry(data_window, width=30)
+        search_entry.pack(pady=5)
+
+        def search():
+            search_term = search_entry.get().strip()
+            if search_term:
+                self.search_owner_in_db(search_term, tree)  # Tìm kiếm trong cơ sở dữ liệu
+            else:
+                messagebox.showwarning("Lỗi", "Vui lòng nhập tên chủ xe, biển số xe hoặc số điện thoại.")
+
+        search_button = tk.Button(button_frame, text="Tìm Kiếm", command=search, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'), width=15)
+        search_button.pack(side=tk.LEFT, padx=5)
+
+        # Nút Reload để tải lại dữ liệu
+        def reload():
+            self.display_all_owners(tree)  # Tải lại toàn bộ dữ liệu vào bảng Treeview
+
+        reload_button = tk.Button(button_frame, text="Tải Lại Dữ Liệu", command=reload, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'), width=15)
+        reload_button.pack(side=tk.LEFT, padx=5)
+
+        # Nút xuất dữ liệu ra Excel
+        def export_to_excel():
+            # Lấy dữ liệu từ Treeview
+            data = []
+            for row in tree.get_children():
+                data.append(tree.item(row)['values'])
+
+            # Chuyển dữ liệu thành DataFrame
+            df = pd.DataFrame(data, columns=["Tên Chủ Xe", "Biển Số Xe", "Số Điện Thoại", "Tuổi", "Địa Chỉ"])
+
+            # Xuất ra file Excel
+            file_path = "owner_data.xlsx"
+            df.to_excel(file_path, index=False, engine='openpyxl')
+            messagebox.showinfo("Thông Báo", f"Dữ liệu đã được xuất ra file: {file_path}")
+
+        export_button = tk.Button(button_frame, text="Xuất Dữ Liệu Ra Excel", command=export_to_excel, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'), width=20)
+        export_button.pack(side=tk.LEFT, padx=5)
+
+        # Tạo Treeview để hiển thị dữ liệu chủ xe
+        tree = ttk.Treeview(data_window, columns=("name", "plate", "phone", "age", "address"), show="headings")
+        tree.pack(padx=10, pady=10)
+
+        # Định nghĩa các cột trong Treeview
+        tree.heading("name", text="Tên Chủ Xe")
+        tree.heading("plate", text="Biển Số Xe")
+        tree.heading("phone", text="Số Điện Thoại")
+        tree.heading("age", text="Tuổi")
+        tree.heading("address", text="Địa Chỉ")
+
+        # Hiển thị tất cả dữ liệu chủ xe ngay khi cửa sổ được mở
+        self.display_all_owners(tree)
+
+    def display_all_owners(self, tree):
+        # Kết nối tới cơ sở dữ liệu và lấy tất cả dữ liệu chủ xe
+        conn = sqlite3.connect('parking_system.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT name, plate, phone, age, address FROM vehicle_info")
+        rows = cursor.fetchall()
+
+        # Xóa tất cả các dòng cũ trong Treeview
+        for item in tree.get_children():
+            tree.delete(item)
+
+
+        # Chèn dữ liệu vào Treeview
+        for row in rows:
+            tree.insert("", tk.END, values=row)
+
+        conn.close()
+
+    def search_owner_in_db(self, search_term, tree):
+        # Kết nối tới cơ sở dữ liệu và tìm kiếm theo tên, biển số xe hoặc số điện thoại
+        conn = sqlite3.connect('parking_system.db')
+        cursor = conn.cursor()
+
+        query = "SELECT name, plate, phone, age, address FROM vehicle_info WHERE name LIKE ? OR plate LIKE ? OR phone LIKE ?"
+        cursor.execute(query, ('%' + search_term + '%', '%' + search_term + '%', '%' + search_term + '%'))
+        rows = cursor.fetchall()
+
+        # Xóa tất cả dữ liệu trong Treeview và chèn kết quả tìm kiếm
+        for item in tree.get_children():
+            tree.delete(item)
+        
+        for row in rows:
+            tree.insert("", tk.END, values=row)
+
+        conn.close()
 
     def toggle_fullscreen(event=None):
         # Toggle fullscreen mode
@@ -130,7 +234,7 @@ class CameraApp:
 
     def open_data_view(self):
         # Cửa sổ hiển thị dữ liệu xe
-        data_window = tk.Toplevel(self.window)
+        data_window = tk.Toplevel(self.window,bg = "#4CAF50")
         data_window.title("Xem Dữ Liệu Xe")
 
         # Tạo Frame để sắp xếp các nút ngang hàng
@@ -138,7 +242,7 @@ class CameraApp:
         button_frame.pack(pady=10)
 
         # Tạo ô nhập tìm kiếm và nút tìm kiếm
-        search_label = tk.Label(data_window, text="Tìm kiếm theo Biển Số Xe hoặc Tên Chủ Xe:")
+        search_label = tk.Label(data_window, text="Tìm kiếm theo Biển Số Xe hoặc Tên Chủ Xe:",bg='#4CAF50')
         search_label.pack(pady=5)
         
         search_entry = tk.Entry(data_window, width=30)
@@ -147,7 +251,9 @@ class CameraApp:
         def search():
             search_term = search_entry.get().strip()
             if search_term:
-                self.search_vehicle_in_db(search_term, tree)  # Tìm kiếm trong cơ sở dữ liệu
+                # Lấy trạng thái (nếu có) và tìm kiếm theo đó
+                status_filter = self.status_filter if hasattr(self, 'status_filter') else 'all'
+                self.search_vehicle_in_db(search_term, status_filter, tree)  # Tìm kiếm với trạng thái lọc
             else:
                 messagebox.showwarning("Lỗi", "Vui lòng nhập biển số xe hoặc tên chủ xe.")
 
@@ -157,23 +263,30 @@ class CameraApp:
         # Nút Reload để tải lại dữ liệu
         def reload():
             self.display_all_vehicles(tree)  # Tải lại toàn bộ dữ liệu vào bảng Treeview
+            self.status_filter = 'all'  # Đặt lại trạng thái lọc thành 'all' khi tải lại dữ liệu
 
         reload_button = tk.Button(button_frame, text="Tải Lại Dữ Liệu", command=reload, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'), width=15)
         reload_button.pack(side=tk.LEFT, padx=5)
 
         # Nút Lọc "Gửi Xe"
         def filter_sent():
-            self.filter_by_status('sent', tree)
+            self.status_filter = 'sent'  # Gửi xe
+            self.display_all_vehicles(tree)  # Tải lại toàn bộ dữ liệu theo trạng thái lọc
 
         filter_sent_button = tk.Button(button_frame, text="Lọc Xe Gửi", command=filter_sent, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'), width=15)
         filter_sent_button.pack(side=tk.LEFT, padx=5)
 
         # Nút Lọc "Lấy Xe"
         def filter_retrieved():
-            self.filter_by_status('retrieved', tree)
+            self.status_filter = 'retrieved'  # Lấy xe
+            self.display_all_vehicles(tree)  # Tải lại toàn bộ dữ liệu theo trạng thái lọc
 
         filter_retrieved_button = tk.Button(button_frame, text="Lọc Xe Lấy", command=filter_retrieved, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'), width=15)
         filter_retrieved_button.pack(side=tk.LEFT, padx=5)
+
+        # Nút xuất dữ liệu ra Excel
+        export_button = tk.Button(button_frame, text="Xuất Excel", command=lambda: self.export_to_excel_vehical(tree), bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'), width=15)
+        export_button.pack(side=tk.LEFT, padx=5)
 
         # Tạo Treeview để hiển thị dữ liệu xe
         tree = ttk.Treeview(data_window, columns=("plate", "name", "entry_exit_count", "status"), show="headings")
@@ -188,42 +301,37 @@ class CameraApp:
         # Hiển thị tất cả dữ liệu xe ngay khi cửa sổ được mở
         self.display_all_vehicles(tree)
 
-    def filter_by_status(self, status, tree):
-        conn = sqlite3.connect('parking_system.db')
-        cursor = conn.cursor()
-
-        # Truy vấn các xe theo trạng thái "Gửi" hoặc "Lấy"
-        query = "SELECT plate, name, entry_exit_count, status FROM vehicle_info WHERE status=?"
-        cursor.execute(query, (status,))
-        vehicles = cursor.fetchall()
-
-        conn.close()
-
-        # Xóa tất cả các dòng cũ trong Treeview
-        for item in tree.get_children():
-            tree.delete(item)
-
-        # Thêm dữ liệu vào Treeview
-        for vehicle in vehicles:
-            tree.insert("", tk.END, values=vehicle)
-        
     def display_all_vehicles(self, tree):
         conn = sqlite3.connect('parking_system.db')
         cursor = conn.cursor()
-        
-        # Truy vấn tất cả dữ liệu xe
-        cursor.execute("SELECT plate, name, entry_exit_count, status FROM vehicle_info")
+
+        # Truy vấn dữ liệu xe theo trạng thái lọc (nếu có)
+        query = "SELECT plate, name, entry_exit_count, status FROM vehicle_info"
+        if hasattr(self, 'status_filter') and self.status_filter != 'all':
+            query += " WHERE status = ?"
+            cursor.execute(query, (self.status_filter,))
+        else:
+            cursor.execute(query)
+
         vehicles = cursor.fetchall()
-        
         conn.close()
-        
+
         # Xóa tất cả các dòng cũ trong Treeview
         for item in tree.get_children():
             tree.delete(item)
 
         # Thêm dữ liệu vào Treeview
         for vehicle in vehicles:
-            tree.insert("", tk.END, values=vehicle)
+            # Thay đổi status 'sent' thành 'Gửi xe' và 'retrieved' thành 'Lấy xe'
+            status = vehicle[3]  # status là cột thứ 4 (index 3)
+            if status == 'sent':
+                status = 'Gửi xe'
+            elif status == 'retrieved':
+                status = 'Lấy xe'
+
+            # Chèn dữ liệu vào Treeview với status đã được thay đổi
+            tree.insert("", tk.END, values=(vehicle[0], vehicle[1], vehicle[2], status))
+
 
     def search_vehicle_in_db(self, search_term, status_filter, tree):
         conn = sqlite3.connect('parking_system.db')
@@ -236,10 +344,13 @@ class CameraApp:
             WHERE (plate LIKE ? OR name LIKE ?)
         """
         
+        # Nếu có trạng thái lọc, thêm điều kiện trạng thái vào query
+        params = ['%' + search_term + '%', '%' + search_term + '%']
         if status_filter != 'all':
             query += " AND status = ?"
+            params.append(status_filter)
 
-        cursor.execute(query, ('%' + search_term + '%', '%' + search_term + '%', status_filter if status_filter != 'all' else None))
+        cursor.execute(query, tuple(params))
         results = cursor.fetchall()
 
         conn.close()
@@ -254,6 +365,38 @@ class CameraApp:
                 tree.insert("", tk.END, values=row)
         else:
             messagebox.showinfo("Thông Báo", "Không tìm thấy xe nào.")
+
+
+    
+    def export_to_excel_vehical(self, tree):
+        # Mở hộp thoại để chọn nơi lưu file Excel
+        file_path = filedialog.asksaveasfilename(defaultextension=".xlsx", filetypes=[("Excel Files", "*.xlsx")])
+        if not file_path:
+            return  # Nếu người dùng hủy, thoát hàm
+
+        # Tạo một workbook mới và một sheet mới
+        wb = openpyxl.Workbook()
+        sheet = wb.active
+        sheet.title = "Dữ Liệu Xe"
+
+        # Thiết lập tiêu đề cột
+        sheet["A1"] = "Biển Số Xe"
+        sheet["B1"] = "Tên Chủ Xe"
+        sheet["C1"] = "Số Lần Ra Vào"
+        sheet["D1"] = "Trạng Thái"
+
+        # Lấy dữ liệu từ Treeview và ghi vào file Excel
+        for i, item in enumerate(tree.get_children(), start=2):
+            values = tree.item(item)["values"]
+            sheet[f"A{i}"] = values[0]  # Biển số xe
+            sheet[f"B{i}"] = values[1]  # Tên chủ xe
+            sheet[f"C{i}"] = values[2]  # Số lần ra vào
+            sheet[f"D{i}"] = values[3]  # Trạng thái
+
+        # Lưu file Excel
+        wb.save(file_path)
+        messagebox.showinfo("Thông Báo", f"Xuất dữ liệu thành công vào {file_path}")
+
 
     def load_vehicle_data(self, tree):
             # Kết nối cơ sở dữ liệu và lấy dữ liệu
@@ -458,14 +601,25 @@ class CameraApp:
         import tkinter as tk
         from tkinter import messagebox
 
-        def filter_images_by_plate_number():
+        def filter_images():
             plate_number_filter = plate_number_entry.get().strip()  # Lấy biển số từ ô nhập
-            view_vehicle_images_filtered(plate_number_filter)  # Gọi hàm hiển thị với biển số đã nhập
+            start_date_str = start_date_entry.get().strip()  # Lấy ngày bắt đầu
+            end_date_str = end_date_entry.get().strip()  # Lấy ngày kết thúc
 
-        def view_vehicle_images_filtered(plate_number_filter=None):
+            # Kiểm tra nếu ngày bắt đầu và kết thúc hợp lệ
+            try:
+                start_date = datetime.strptime(start_date_str, "%Y-%m-%d") if start_date_str else None
+                end_date = datetime.strptime(end_date_str, "%Y-%m-%d") if end_date_str else None
+            except ValueError:
+                messagebox.showerror("Lỗi", "Ngày phải có định dạng YYYY-MM-DD.")
+                return
+
+            view_vehicle_images_filtered(plate_number_filter, start_date, end_date)  # Gọi hàm hiển thị với các bộ lọc
+
+        def view_vehicle_images_filtered(plate_number_filter=None, start_date=None, end_date=None):
             """
             Lọc và hiển thị các ảnh trong frame "Lọc Ảnh Xe Theo Biển Số",
-            có thể lọc theo biển số xe.
+            có thể lọc theo biển số xe và ngày.
             """
             if not os.path.exists(images_folder):
                 messagebox.showerror("Lỗi", "Thư mục lưu ảnh không tồn tại.")
@@ -481,6 +635,25 @@ class CameraApp:
             # Nếu có filter biển số, chỉ chọn những ảnh có chứa biển số này
             if plate_number_filter:
                 images = [f for f in images if plate_number_filter in f]
+
+            # Lọc theo ngày nếu có
+            if start_date or end_date:
+                filtered_images = []
+                for img_file in images:
+                    try:
+                        parts = img_file.split('_')
+                        date_str = parts[1]
+                        time_str = parts[2].split('.')[0]
+
+                        full_time_str = date_str + time_str
+                        img_date = datetime.strptime(full_time_str, "%Y%m%d%H%M%S")
+                        
+                        # Kiểm tra nếu ảnh nằm trong khoảng ngày
+                        if (not start_date or img_date >= start_date) and (not end_date or img_date <= end_date):
+                            filtered_images.append(img_file)
+                    except (ValueError, IndexError) as e:
+                        print(f"Lỗi xử lý thời gian: {e}")
+                images = filtered_images  # Cập nhật lại danh sách ảnh đã lọc theo ngày
 
             # Sắp xếp các ảnh theo thứ tự thời gian (tên file chứa thời gian)
             images.sort(key=lambda x: x.split('_')[1] + x.split('_')[2].split('.')[0])
@@ -529,22 +702,40 @@ class CameraApp:
         # Tạo cửa sổ chính để hiển thị ảnh và lọc ảnh theo biển số
         top = tk.Toplevel()
         top.title("Lọc Ảnh Xe Theo Biển Số")
-        top.configure(bg="#f0f0f0")  # Màu nền của cửa sổ
+        top.configure(bg="#4CAF50")  # Màu nền của cửa sổ
 
         # Tạo frame chứa label, ô nhập và nút "Lọc"
-        filter_frame = tk.Frame(top, bg="#f0f0f0")
+        filter_frame = tk.Frame(top, bg="#4CAF50")
         filter_frame.pack(pady=10, padx=20, fill="x")
 
-        # Label biển số và ô nhập nằm kế nhau
-        label = tk.Label(filter_frame, text="Nhập biển số xe:", font=("Arial", 12), bg="#f0f0f0")
-        label.pack(side="left", padx=10)
+        # Label biển số và ô nhập nằm trong cột đầu tiên
+        label = tk.Label(filter_frame, text="Nhập biển số xe:", font=("Arial", 12), bg="#4CAF50")
+        label.grid(row=0, column=0, padx=10, pady=5, sticky="w")
 
-        plate_number_entry = tk.Entry(filter_frame, font=("Arial", 14), bg="#ffffff", relief="solid", bd=2)
-        plate_number_entry.pack(side="left", padx=10, fill="x", expand=True)
+        plate_number_entry = tk.Entry(filter_frame, font=("Arial", 14), bg="#4CAF50", relief="solid", bd=2)
+        plate_number_entry.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
 
-        # Nút "Lọc"
-        filter_button = tk.Button(filter_frame, text="Lọc", font=("Arial", 12), command=filter_images_by_plate_number, bg="#4CAF50", fg="white", relief="solid", bd=2)
-        filter_button.pack(side="left", padx=10)
+        # Label và ô nhập cho ngày bắt đầu và ngày kết thúc nằm trong cột đầu tiên
+        start_date_label = tk.Label(filter_frame, text="Ngày bắt đầu (YYYY-MM-DD):", font=("Arial", 12), bg="#4CAF50")
+        start_date_label.grid(row=1, column=0, padx=10, pady=5, sticky="w")
+
+        start_date_entry = tk.Entry(filter_frame, font=("Arial", 14), bg="#4CAF50", relief="solid", bd=2)
+        start_date_entry.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
+
+        end_date_label = tk.Label(filter_frame, text="Ngày kết thúc (YYYY-MM-DD):", font=("Arial", 12), bg="#4CAF50")
+        end_date_label.grid(row=2, column=0, padx=10, pady=5, sticky="w")
+
+        end_date_entry = tk.Entry(filter_frame, font=("Arial", 14), bg="#4CAF50", relief="solid", bd=2)
+        end_date_entry.grid(row=2, column=1, padx=10, pady=5, sticky="ew")
+
+        # Nút "Lọc" nằm trong cột tiếp theo
+        filter_button = tk.Button(filter_frame, text="Lọc", font=("Arial", 12), command=filter_images, bg="#4CAF50", fg="white", relief="solid", bd=2)
+        filter_button.grid(row=0, column=2, padx=10, pady=5, sticky="ew")
+
+        # Đặt trọng số cho các cột để tự động mở rộng
+        filter_frame.grid_columnconfigure(1, weight=1)
+        filter_frame.grid_columnconfigure(2, weight=0)
+
 
         # Tạo canvas và scrollbar để hiển thị ảnh
         canvas = tk.Canvas(top, width=600, height=400, bg="#f0f0f0")
@@ -573,6 +764,8 @@ class CameraApp:
 
 
 
+
+
         
     def update_vehicle_status(self, plate):
         conn = sqlite3.connect('parking_system.db')
@@ -588,41 +781,41 @@ class CameraApp:
         info_window = tk.Toplevel(self.window)
         info_window.title("Nhập Thông Tin Xe")
         info_window.geometry("400x400")  # Kích thước cửa sổ
+        info_window.configure(bg="#4CAF50")  # Thay đổi màu nền của cửa sổ
 
-        # Tạo frame chứa các trường nhập
-        frame = tk.Frame(info_window, padx=20, pady=20)
+        # Tạo frame chứa các trường nhập với màu nền
+        frame = tk.Frame(info_window, padx=20, pady=20, bg="#4CAF50")  # Thay đổi màu nền của frame
         frame.pack(padx=10, pady=10)
 
         # Tiêu đề cửa sổ
-        title_label = tk.Label(info_window, text="Nhập Thông Tin Xe", font=("Arial", 16, "bold"), fg="#4CAF50")
-        title_label.pack(pady=10)
+        # title_label = tk.Label(info_window, text="Nhập Thông Tin Xe", font=("Arial", 16, "bold"), fg="#ffffff", bg="#4CAF50") 
+        # title_label.pack(pady=10)
 
         # Các trường nhập thông tin
-        plate_label = tk.Label(frame, text="Biển Số Xe:", font=("Arial", 12), anchor='w')
+        plate_label = tk.Label(frame, text="Biển Số Xe:", font=("Arial", 12, "bold"), anchor='w', bg="#4CAF50", fg="#ffffff") 
         plate_label.grid(row=0, column=0, pady=5, sticky="w")
         plate_entry = tk.Entry(frame, width=30, font=("Arial", 12))
         plate_entry.grid(row=0, column=1, pady=5)
 
-        name_label = tk.Label(frame, text="Tên Chủ Xe:", font=("Arial", 12), anchor='w')
+        name_label = tk.Label(frame, text="Tên Chủ Xe:", font=("Arial", 12, "bold"), anchor='w', bg="#4CAF50", fg="#ffffff") 
         name_label.grid(row=1, column=0, pady=5, sticky="w")
         name_entry = tk.Entry(frame, width=30, font=("Arial", 12))
         name_entry.grid(row=1, column=1, pady=5)
 
-        age_label = tk.Label(frame, text="Tuổi:", font=("Arial", 12), anchor='w')
+        age_label = tk.Label(frame, text="Tuổi:", font=("Arial", 12, "bold"), anchor='w', bg="#4CAF50", fg="#ffffff")  
         age_label.grid(row=2, column=0, pady=5, sticky="w")
         age_entry = tk.Entry(frame, width=30, font=("Arial", 12))
         age_entry.grid(row=2, column=1, pady=5)
 
-        phone_label = tk.Label(frame, text="Số Điện Thoại:", font=("Arial", 12), anchor='w')
+        phone_label = tk.Label(frame, text="Số Điện Thoại:", font=("Arial", 12, "bold"), anchor='w', bg="#4CAF50", fg="#ffffff") 
         phone_label.grid(row=3, column=0, pady=5, sticky="w")
         phone_entry = tk.Entry(frame, width=30, font=("Arial", 12))
         phone_entry.grid(row=3, column=1, pady=5)
 
-        address_label = tk.Label(frame, text="Địa Chỉ:", font=("Arial", 12), anchor='w')
+        address_label = tk.Label(frame, text="Địa Chỉ:", font=("Arial", 12, "bold"), anchor='w', bg="#4CAF50", fg="#ffffff")  
         address_label.grid(row=4, column=0, pady=5, sticky="w")
         address_entry = tk.Entry(frame, width=30, font=("Arial", 12))
         address_entry.grid(row=4, column=1, pady=5)
-
 
         def save_info():
             plate = plate_entry.get()
@@ -667,10 +860,50 @@ scan_button.pack()
 def open_parking_interface():
     CameraApp(root, "Gửi Xe / Lấy Xe")# Mở rộng cửa sổ toàn màn hình
     
+def login():
+    login_window = tk.Toplevel(root)
+    login_window.title("Đăng Nhập")
+    login_window.geometry("350x300")
+    login_window.configure(bg='#4CAF50')  # Màu nền cho cửa sổ đăng nhập
+
+    # Tiêu đề
+    title_label = tk.Label(login_window, text="Đăng Nhập", font=("Arial", 20, "bold"), bg= '#4CAF50', fg='#f0f0f0')
+    title_label.grid(row=0, column=0, columnspan=2, pady=20)
+
+    # Tên người dùng
+    username_label = tk.Label(login_window, text="Tên Người Dùng:", font=("Arial", 12), bg= '#4CAF50')
+    username_label.grid(row=1, column=0, pady=5, sticky="e")  # Căn lề phải cho label
+    username_entry = tk.Entry(login_window, font=("Arial", 12), bd=2, relief="solid")
+    username_entry.grid(row=1, column=1, pady=5, padx=20, sticky="w")  # Căn lề trái cho textfield
+
+    # Mật khẩu
+    password_label = tk.Label(login_window, text="Mật Khẩu:", font=("Arial", 12), bg= '#4CAF50')
+    password_label.grid(row=2, column=0, pady=5, sticky="e")  # Căn lề phải cho label
+    password_entry = tk.Entry(login_window, show="*", font=("Arial", 12), bd=2, relief="solid")
+    password_entry.grid(row=2, column=1, pady=5, padx=20, sticky="w")  # Căn lề trái cho textfield
+
+    # Thêm một nhãn thông báo
+    message_label = tk.Label(login_window, text="", font=("Arial", 10), bg= '#4CAF50', fg='red')
+    message_label.grid(row=3, column=0, columnspan=2, pady=5)
+
+    def check_login():
+        username = username_entry.get()
+        password = password_entry.get()
+        if username == "" and password == "":  # Thay đổi thông tin đăng nhập ở đây
+            login_window.destroy()
+            open_parking_interface()
+        else:
+            message_label.config(text="Tên người dùng hoặc mật khẩu không đúng.")
+
+    # Nút đăng nhập
+    login_button = tk.Button(login_window, text="Đăng Nhập", width=20, height=2, command=check_login, bg='#ffffff', fg='#4CAF50', font=('Arial', 12, 'bold'))
+    login_button.grid(row=4, column=0, columnspan=2, pady=20)
+
+
 
 
 # Tạo nút gửi xe/lấy xe
-parking_button = tk.Button(frame, text="Gửi Xe / Lấy Xe", command=open_parking_interface, height=2, width=20, bg='#ffffff', fg='#4CAF50', font=('Arial', 14, 'bold'))
+parking_button = tk.Button(frame, text="Gửi Xe / Lấy Xe", command=login, height=2, width=20, bg='#ffffff', fg='#4CAF50', font=('Arial', 14, 'bold'))
 parking_button.pack(pady=10)
 
 
